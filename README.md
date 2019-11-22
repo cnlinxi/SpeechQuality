@@ -125,3 +125,103 @@ Non-trainable params: 0
 1. 动手标注具体的音频数据。首先使用VAD切分，然后对每一段音频数据整体给定一个主观评分。
 2. 上报数据采用一种直方图的形式，先VAD切分音频数据，然后类似于类似于NetEQ中的IAT制作成直方图，上报。
 3. 请教别人问题要明确，描述要清楚。给出问题的上下文，描述出这个问题是什么。
+
+### 2019年11月21日
+
+1. 首批数据标注完毕。
+
+2. 实验记录
+   
+   1. frame_power_ratio,local_power,mfcc,-10mfcc,+10mfcc
+   ```
+   test size: 2018, number of pred positive: 38
+    mistake warn: 18
+              precision    recall  f1-score   support
+
+           0       0.98      0.99      0.99      1961
+           1       0.53      0.35      0.42        57
+
+    accuracy                           0.97      2018
+    macro avg       0.75      0.67      0.70      2018
+    weighted avg       0.97      0.97      0.97      2018
+    ```
+
+   2. frame_power_ratio,local_power,mute_sample_duration,mfcc,-10mfcc,+10mfcc
+   ```
+    test size: 2018, number of pred positive: 35
+    mistake warn: 16
+              precision    recall  f1-score   support
+
+           0       0.98      0.99      0.99      1961
+           1       0.54      0.33      0.41        57
+
+    accuracy                           0.97      2018
+    macro avg       0.76      0.66      0.70      2018
+    weighted avg       0.97      0.97      0.97      2018
+   ```
+
+   3. 
+   ```
+    data shape:  (10087, 64)
+    model:  random_forest_model
+    data: solution4_data.npy
+    test size: 2018, number of pred positive: 14
+    mistake warn: 0
+              precision    recall  f1-score   support
+
+           0       0.98      1.00      0.99      1961
+           1       1.00      0.25      0.39        57
+
+    accuracy                           0.98      2018
+   macro avg       0.99      0.62      0.69      2018
+    weighted avg       0.98      0.98      0.97      2018
+    ```
+
+    4. K折交叉验证
+   ```
+   model:  RandomForestClassifier(bootstrap=True, 
+                    class_weight={0.0: 1, 1.0: 200.0},
+                       criterion='gini', max_depth=64, max_features='auto',
+                       max_leaf_nodes=None, min_impurity_decrease=0.0,
+                       min_impurity_split=None, min_samples_leaf=1,
+                       min_samples_split=2, min_weight_fraction_leaf=0.0,
+                       n_estimators=100, n_jobs=None, oob_score=False,
+                       random_state=2019, verbose=0, warm_start=False)
+    avg mistake warn: 0.4, precision: 0.980952380952381, recall: 0.2887827649411744
+    data shape:  (10864, 65)
+    data:  data/solution4_data3.npy
+    train size: 108, number of train positive: 5
+    test size: 10756, number of pred positive: 258
+    mistake warn: 0
+              precision    recall  f1-score   support
+
+           0       1.00      1.00      1.00     10459
+           1       1.00      0.87      0.93       297
+
+    accuracy                           1.00     10756
+    macro avg       1.00      0.93      0.96     10756
+    weighted avg       1.00      1.00      1.00     10756
+   ```
+
+ ### 数据集迭代历史
+
+ 1. solution4_data.npy: 包含exp1~exp5，solution4_metadata4.csv，音频没有进行预处理。使用的特征：frame_power_ratio（语音转变点前n毫秒与后n毫秒的能量比值），local_power（语音转变点的某个时间区间内的能量）,mfcc(20)（语音转变点处20维度的MFCC）,-10mfcc（语音转变点之前10毫秒20维MFCC）,+10mfcc（语音转变点之后10毫秒的20维MFCC）。
+   solution4_metadata4.csv是经过两遍清理之后的数据元数据，也是第一批给出去的标注数据，没有加入exp6。在这个数据上，感觉naive train跑得最好。
+
+2. solution4_data2.npy：包含exp1~exp5，solution4_metadata4.csv，音频没有进行预处理。使用的特征：frame_power_ratio,local_power,mute_sample_duration（与下一个speech开始点的样本点序号差值）,mfcc(20),-10mfcc,+10mfcc。在这个数据上，感觉还没有solution4_data.npy表现好，加入mute_sample_duration是加入了噪声？
+
+3. solution4_data3.npy：新增了exp6的old数据，用的特征是一样的：frame_power_ratio,local_power,mute_sample_duration,mfcc(20),-10mfcc,+10mfcc。
+
+
+### 本周总结
+本周主要是：
+1. 标注了一份数据，数据格式：
+
+```
+audio_down_id,wav_filename,index,time,label,unnature,sharpdecline,pairbreak
+exp1_opus_10_16920,exp1_opus_10,16920,2.115,0,,,
+exp1_opus_10_18040,exp1_opus_10,18040,2.255,0,,,
+```
+其中，id为每一个语音停顿点的全局唯一编号；wav_filename是其所在的音频名称；index为发生语音停顿的样本序号；time是发生语音停顿的时间；label标示该停顿是否为非正常停顿，1表示非正常；unnature,sharpdecline,pairbreak分别表示该非正常的类型，分别为不正常的语音，突然的停止和呈现对称的停顿。这个数据集还可以进一步标注。
+
+2. 利用这份数据简单的迭代了几次实验。第一种纯利用规则的实验（solution3），该方法对于exp5，exp6这种类型的语音非常容易发生误报，其余exp1~4都没有发生误报，另外该方法recall很低。第二种加上了一点随机森林，调参，kfold，目前cv上为：avg mistake warn: 0.8，也即是在这个数据集上253个报警平均下来有4个误报；但是这种方法还有很多改进空间：数据集还可以进一步清洗（有多少人工就有多好的性能），更多更细致的特征，如在标注数据的过程中，还有哪些特征可以用？
